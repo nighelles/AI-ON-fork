@@ -1,6 +1,7 @@
 import os.path
 import time
 import numpy as np
+import cupy
 import random
 
 from chainer import (Variable, Chain, serializers, optimizers, report)
@@ -87,7 +88,7 @@ class PredictiveAutoencoder(Chain):
 
     def __call__(self, x, action):
         h1 = F.relu(self.conv1(x))
-        index = F.expand_dims(np.array(action, dtype=np.int32), axis=0)
+        index = F.expand_dims(cupy.array(action, dtype="int32"), axis=0)
         h2 = F.relu(self.embed_conv2d(index, x))
         h = F.concat((h1, h2), axis=1)  # Glue together the action convolutions
         h = F.relu(self.conv2(h))
@@ -132,7 +133,7 @@ class Classifier(Chain):
         self.error_mask = normalize_2d(F.squared_error(self.y_image, t_image))
         action_loss = F.softmax_cross_entropy(
             self.y_action,
-            F.expand_dims(np.array(t_action, dtype=np.int32), axis=0),
+            F.expand_dims(cupy.array(t_action, dtype="int32"), axis=0),
         )
         print('Image loss', image_loss.data, ', Action loss:', action_loss.data)
         return self.weight * image_loss + (1.0 - self.weight) * action_loss
@@ -143,7 +144,8 @@ class PredictorAgent(object):
                  name=None,
                  load_saved=True,
                  classifier_weight=0.5,
-                 backprop_rounds=10):
+                 backprop_rounds=10,
+                 gpu=-1):
         self.name = name or 'predictive_autoencoder'
         self.save_dir = save_dir
         self.backprop_rounds = backprop_rounds
@@ -155,7 +157,10 @@ class PredictorAgent(object):
             environment=environment,
         )
 
-        self.classifier = Classifier(self.model, weight=classifier_weight)
+        model = self.model
+        if (gpu > 0):
+            model = model.to_gpu(gpu)
+        self.classifier = Classifier(model, weight=classifier_weight)
 
         self.optimizer = optimizers.Adam()
         self.optimizer.setup(self.model)
@@ -239,7 +244,7 @@ class PredictorAgent(object):
 
 def to_one_hot(size, index):
     '''Converts an int into a one-hot array'''
-    arr = np.zeros(size, dtype=np.int32)
+    arr = cupy.zeros(size, dtype="int32")
     arr[index] = 1
     return arr
 

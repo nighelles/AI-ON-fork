@@ -3,7 +3,11 @@ import os.path
 import time
 
 import numpy as np
+import cupy
 
+import argparse
+
+import chainer
 import chainer.functions as F
 import chainer.links as L
 import chainer.computational_graph as cg
@@ -30,15 +34,21 @@ def to_image_format(arr):
     return (arr * 255).astype('int8')
 
 def to_err_mask_image(arr):
-    maxval = np.max(arr)
-    minval = np.min(arr)
+    maxval = cupy.max(arr)
+    minval = cupy.min(arr)
     compressed = (arr - minval) / (maxval - minval)
     return (compressed * 255).astype('int8')
 
 
 def main(game_name, model_name):
+    parser = argparse.ArgumentParser(description="Auto Trainer")
+    parser.add_argument('--gpu', '-g', type=int, default = -1)
+    args = parser.parse_args()
+
+    print('Using gpu: {}'.format(args.gpu))
+
     env = gym.make(game_name)
-    agent = PredictorAgent(SAVE_DIR, env, name=model_name)
+    agent = PredictorAgent(SAVE_DIR, env, name=model_name, gpu=args.gpu)
     prediction_view = rendering.SimpleImageViewer()
     error_view = rendering.SimpleImageViewer()
 
@@ -47,7 +57,7 @@ def main(game_name, model_name):
 
     for i in range(ROUNDS):
         if reset:
-            reset_obs = process_image(env.reset())
+            reset_obs = cupy.array(process_image(env.reset()).data, dtype="float32")
             agent.initialize_state(reset_obs)
             action = agent(reset_obs, reward=0)
             if action >= env.action_space.n:
@@ -56,7 +66,7 @@ def main(game_name, model_name):
         raw_obs, reward, reset, _data = env.step(action)
         if reward:
             print('Non-zero reward:', reward)
-        obs = process_image(raw_obs)
+        obs = cupy.array(process_image(raw_obs).data, dtype="float32")
         action = agent(obs, reward)
         if action >= env.action_space.n:
             action = 0  # no-op

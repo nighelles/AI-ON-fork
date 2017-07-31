@@ -45,12 +45,12 @@ class ConvGRU2D(Chain):
         self.reset_state()
 
     def to_cpu(self):
-        super(Convolution2DGRU, self).to_cpu()
+        super(ConvGRU2D, self).to_cpu()
         if self.h is not None:
             self.h.to_cpu()
 
     def to_gpu(self, device=None):
-        super(Convolution2DGRU, self).to_gpu(device)
+        super(ConvGRU2D, self).to_gpu(device)
         if self.h is not None:
             self.h.to_gpu(device)
 
